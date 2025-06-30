@@ -400,7 +400,7 @@ async fn main() {
         .route("/send/sol", post(send_sol))
         .route("/send/token", post(send_token));
 
-    let address = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let address = SocketAddr::from(([0, 0, 0, 0], 8080));
     println!("Server running at http://{}", address);
 
     let listener = TcpListener::bind(address).await.unwrap();
