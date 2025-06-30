@@ -5,7 +5,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
+    instruction::{AccountMeta},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     system_program,
@@ -403,6 +403,65 @@ async fn send_token(Json(payload): Json<SendTokenRequest>) -> impl IntoResponse 
     (StatusCode::OK, Json(response))
 }
 
+#[derive(Deserialize)]
+struct SignMessageRequest {
+    message: String,
+    secret: String,
+}
+
+#[derive(Serialize)]
+struct SignMessageResponseData {
+    signature: String,
+    public_key: String,
+    message: String,
+}
+
+async fn sign_message(Json(payload): Json<SignMessageRequest>) -> impl IntoResponse {
+    if payload.message.is_empty() || payload.secret.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "success": false, "error": "Missing required fields" })),
+        );
+    }
+
+    let secret_bytes = match bs58::decode(&payload.secret).into_vec() {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "success": false, "error": "Invalid base58 secret" })),
+            );
+        }
+    };
+
+    let keypair = match Keypair::from_bytes(&secret_bytes) {
+        Ok(kp) => kp,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "success": false, "error": "Invalid secret key bytes" })),
+            );
+        }
+    };
+
+    let message_bytes = payload.message.as_bytes();
+    let signature = keypair.sign_message(message_bytes);
+
+    let response_data = SignMessageResponseData {
+        signature: general_purpose::STANDARD.encode(signature.as_ref()),
+        public_key: keypair.pubkey().to_string(),
+        message: payload.message,
+    };
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "success": true,
+            "data": response_data
+        })),
+    )
+}
+
 #[tokio::main]
 async fn main() {
     let app = Router::new()
@@ -410,6 +469,7 @@ async fn main() {
         .route("/token/create", post(create_token))
         .route("/token/mint", post(mint_token))
         .route("/message/verify", post(verify_message))
+        .route("/message/sign", post(sign_message))
         .route("/send/sol", post(send_sol))
         .route("/send/token", post(send_token));
 
