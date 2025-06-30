@@ -17,19 +17,32 @@ use ed25519_dalek::{PublicKey as DalekPublicKey, Signature as DalekSignature, Ve
 use bs58;
 
 async fn generate_keypair() -> impl IntoResponse {
-    let keypair = Keypair::new();
-    let pubkey = keypair.pubkey().to_string();
-    let secret_base64 = general_purpose::STANDARD.encode(keypair.to_bytes());
+    let keypair_result = std::panic::catch_unwind(|| Keypair::new());
 
-    let response = json!({
-        "success": true,
-        "data": {
-            "pubkey": pubkey,
-            "secret": secret_base64
+    match keypair_result {
+        Ok(keypair) => {
+            let pubkey = keypair.pubkey().to_string();
+            let secret_base64 = general_purpose::STANDARD.encode(keypair.to_bytes());
+
+            let response = json!({
+                "success": true,
+                "data": {
+                    "pubkey": pubkey,
+                    "secret": secret_base64
+                }
+            });
+
+            (StatusCode::OK, Json(response))
         }
-    });
+        Err(_) => {
+            let response = json!({
+                "success": false,
+                "error": "Failed to generate keypair"
+            });
 
-    (StatusCode::OK, Json(response))
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        }
+    }
 }
 
 #[derive(Deserialize)]
